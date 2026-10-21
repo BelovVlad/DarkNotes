@@ -14,29 +14,60 @@ async function objects(page: Page) {
   });
 }
 
-test('palette moves, collapses, remembers its position and stays reachable after rotation', async ({ page }) => {
+async function dockAt(page: Page, x: number, y: number) {
+  const handle = (await page.getByRole('button', { name: 'Переместить панель', exact: true }).boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down();
+  await page.mouse.move(x, y, { steps: 12 }); await page.mouse.up();
+}
+
+test('palette docks at every edge, turns vertically and keeps settings attached', async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 }); await create(page);
   const palette = page.getByRole('toolbar', { name: 'Инструменты рисования' });
-  const grip = page.getByRole('button', { name: 'Переместить панель', exact: true });
-  const before = (await palette.boundingBox())!, handle = (await grip.boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + 20); await page.mouse.down();
-  await page.mouse.move(handle.x + handle.width / 2 + 90, handle.y + 280, { steps: 12 }); await page.mouse.up();
-  const moved = (await palette.boundingBox())!; expect(moved.y).toBeGreaterThan(before.y + 200);
+  const cases = [{edge:'left',x:12,y:400},{edge:'right',x:1168,y:400},{edge:'bottom',x:590,y:770},{edge:'top',x:590,y:60}];
+  for (const target of cases) {
+    await dockAt(page,target.x,target.y); await expect(palette).toHaveAttribute('data-edge',target.edge);
+    const vertical=target.edge==='left'||target.edge==='right'; await expect(palette).toHaveAttribute('aria-orientation',vertical?'vertical':'horizontal');
+    await page.getByRole('button',{name:'Параметры пера',exact:true}).click();
+    const panel=page.getByRole('region',{name:'Параметры инструмента',exact:true});await expect(panel).toBeVisible();
+    await expect.poll(async()=>{
+      const p=(await panel.boundingBox())!,t=(await palette.boundingBox())!;
+      if(target.edge==='top')return Math.abs(p.y-t.y-t.height-10)<2;
+      if(target.edge==='bottom')return Math.abs(t.y-p.y-p.height-10)<2;
+      if(target.edge==='left')return Math.abs(p.x-t.x-t.width-10)<2;
+      return Math.abs(t.x-p.x-p.width-10)<2;
+    }).toBe(true);
+    await expect.poll(async()=>{const p=(await panel.boundingBox())!;return p.x>=12&&p.y>=56&&p.x+p.width<=1168&&p.y+p.height<=808;}).toBe(true);
+    if(target.edge==='right')await page.screenshot({path:'test-results/docked-palette-right.png'});
+    await page.getByRole('button',{name:'Закрыть параметры',exact:true}).click();
+  }
   expect(await objects(page)).toHaveLength(0);
-  await page.getByRole('button', { name: 'Свернуть панель инструментов', exact: true }).click();
-  await expect(palette).toHaveAttribute('data-collapsed', 'true');
-  expect((await palette.boundingBox())!.width).toBeLessThan(240);
-  await page.getByRole('button', { name: 'Развернуть панель', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Ручка (P)', exact: true })).toBeVisible();
-  await page.reload(); await expect(palette).toBeVisible();
-  expect((await palette.boundingBox())!.y).toBeCloseTo(moved.y, 0);
-  await page.setViewportSize({ width: 820, height: 1180 });
-  await expect.poll(async () => { const b = (await palette.boundingBox())!; return b.x >= 8 && b.x + b.width <= 812 && b.y + b.height < 1180; }).toBe(true);
-  await grip.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowDown');
-  expect((await palette.boundingBox())!.y).toBe(74);
-  await page.getByRole('button', { name: 'Режим письма', exact: true }).click();
-  await expect(page.locator('.editor-header')).toBeHidden();
-  await page.screenshot({ path: 'test-results/floating-palette-ipad.png' });
+});
+
+test('docked palette collapses, persists, rotates and supports keyboard docking', async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 }); await create(page);
+  const palette=page.getByRole('toolbar'),grip=page.getByRole('button',{name:'Переместить панель',exact:true});
+  await dockAt(page,12,400);await expect(palette).toHaveAttribute('data-edge','left');
+  await page.getByRole('button',{name:'Свернуть панель инструментов',exact:true}).click();
+  await expect(palette).toHaveAttribute('data-collapsed','true');expect((await palette.boundingBox())!.height).toBeLessThan(160);
+  await page.getByRole('button',{name:'Развернуть панель',exact:true}).click();await page.reload();
+  await expect(palette).toHaveAttribute('data-edge','left');await page.setViewportSize({width:820,height:1180});
+  await expect.poll(async()=>{const b=(await palette.boundingBox())!;return b.x>=8&&b.x+b.width<=812&&b.y>=56&&b.y+b.height<=1138;}).toBe(true);
+  await grip.focus();await page.keyboard.press('Alt+ArrowRight');await expect(palette).toHaveAttribute('data-edge','right');
+  await page.keyboard.press('Home');await expect(palette).toHaveAttribute('data-edge','top');
+  await page.getByRole('button',{name:'Режим письма',exact:true}).click();await expect(page.locator('.editor-header')).toBeHidden();
+  await page.screenshot({path:'test-results/floating-palette-ipad.png'});
+});
+
+test('document header hides on downward scroll and returns on upward scroll or reveal', async ({ page }) => {
+  await page.setViewportSize({width:1180,height:820});await create(page);
+  const header=page.locator('.editor-header'),view=page.getByTestId('page-viewport');
+  const original=(await view.boundingBox())!.height;
+  await page.mouse.move(900,400);await page.mouse.wheel(0,320);await expect(header).toBeHidden();
+  await expect.poll(async()=>(await view.boundingBox())!.height).toBeGreaterThan(original+35);
+  await page.mouse.wheel(0,-180);await expect(header).toBeVisible();
+  await page.mouse.wheel(0,350);await expect(header).toBeHidden();
+  await page.getByRole('button',{name:'Показать меню документа',exact:true}).click();await expect(header).toBeVisible();
+  expect(await objects(page)).toHaveLength(0);
 });
 
 test('touch drag never draws ink and Pencil pressure/tilt survive reload', async ({ page, context }) => {

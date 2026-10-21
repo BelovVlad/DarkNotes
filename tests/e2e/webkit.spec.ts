@@ -38,6 +38,9 @@ test('WebKit tablet: ink, undo/redo, palette, rotation and offline persistence',
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await context.setOffline(true); await page.reload(); await expect(page.getByTestId('drawing-canvas')).toBeVisible();
   expect((await current(page)).pages[0].objects).toEqual(saved);
+  await page.getByRole('button',{name:'Параметры пера',exact:true}).click();
+  const palette=(await page.getByRole('toolbar').boundingBox())!,panel=(await page.getByRole('region',{name:'Параметры инструмента',exact:true}).boundingBox())!;
+  expect(panel.x).toBeGreaterThanOrEqual(palette.x+palette.width+8);
   await page.screenshot({ path: 'test-results/webkit-tablet.png' }); expect(errors).toEqual([]);
 });
 

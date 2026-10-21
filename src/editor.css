@@ -187,3 +187,37 @@
  .floating-toolbar .palette-collapse { width:28px; min-width:28px; }
  .palette-grip { width:22px; min-width:22px; }
 }
+
+/* Edge docking and attached tool settings. */
+.editor-shell { --editor-header-height:48px; }
+.editor-shell .editor-header { height:var(--editor-header-height); min-height:var(--editor-header-height); transition:margin-top .2s ease,opacity .2s ease; }
+.header-hidden .editor-header { margin-top:calc(0px - var(--editor-header-height)); opacity:0; visibility:hidden; pointer-events:none; }
+.header-reveal { position:absolute; z-index:51; left:50%; top:0; transform:translateX(-50%); width:52px; height:23px; display:grid; place-items:center; border:1px solid var(--line); border-top:0; border-radius:0 0 12px 12px; background:var(--panel); color:var(--muted); }
+.pen-popover { position:fixed; width:300px; max-width:calc(100vw - 24px); padding:0; max-height:calc(100dvh - 76px); overflow:auto; border:0; background:none; box-shadow:var(--shadow); z-index:45; }
+.pen-popover>.pen-properties { position:static; width:100%; max-width:none; max-height:none; margin:0; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:none; }
+.editor-shell .floating-toolbar { transition:left .16s ease,top .16s ease; }
+.editor-shell .floating-toolbar.dragging { transition:none; }
+.editor-shell .floating-toolbar.vertical { flex-direction:column; width:58px; max-width:58px; max-height:var(--palette-height); min-height:0; padding:5px; border-radius:22px; gap:2px; }
+.floating-toolbar.vertical .palette-content { flex-direction:column; flex-wrap:nowrap; gap:5px; max-width:100%; min-height:0; overflow-x:hidden; overflow-y:auto; scrollbar-width:none; }
+.floating-toolbar.vertical .toolbar-group { flex-direction:column; border-right:0; border-bottom:1px solid var(--line); padding:0 0 5px; flex-shrink:0; gap:0; }
+.floating-toolbar.vertical .toolbar-group.tools { order:0; flex-basis:auto; border-bottom:1px solid var(--line); }
+.floating-toolbar.vertical .toolbar-group.palette { padding-bottom:0; border:0; }
+.floating-toolbar.vertical .icon-button { width:44px; min-width:44px; height:40px; min-height:40px; flex-shrink:0; }
+.floating-toolbar.vertical .palette-grip { min-width:44px; width:44px; min-height:22px; height:22px; align-self:center; border-radius:14px 14px 6px 6px; flex-shrink:0; }
+.floating-toolbar.vertical .palette-grip svg { transform:rotate(90deg); }
+.floating-toolbar.vertical .palette-collapse { height:28px; min-height:28px; }
+.floating-toolbar.vertical .palette-reopen { min-width:44px; padding:0; justify-content:center; }
+.floating-toolbar.vertical .palette-reopen span,.floating-toolbar.vertical .color-button.small,.floating-toolbar.vertical .width-button { display:none; }
+.floating-toolbar.vertical.collapsed { width:58px; }
+.palette-dock-indicator { position:absolute; z-index:35; pointer-events:none; background:var(--accent); opacity:.55; border-radius:4px; box-shadow:0 0 12px var(--accent); }
+.palette-dock-indicator.dock-top,.palette-dock-indicator.dock-bottom { width:96px; height:3px; left:calc(50% - 48px); }
+.palette-dock-indicator.dock-top { top:calc(var(--dock-top) - 5px); }
+.palette-dock-indicator.dock-bottom { bottom:36px; }
+.palette-dock-indicator.dock-left,.palette-dock-indicator.dock-right { width:3px; height:96px; top:calc(50% - 48px); }
+.palette-dock-indicator.dock-left { left:2px; }.palette-dock-indicator.dock-right { right:2px; }
+@media(max-width:900px) { .editor-shell { --editor-header-height:46px; } }
+@media(orientation:landscape) and (max-height:650px) { .editor-shell { --editor-header-height:42px; } }
+@media(max-height:720px) {
+ .floating-toolbar.vertical .icon-button { height:34px; min-height:34px; }
+ .floating-toolbar.vertical .palette-content { gap:2px; }
+}

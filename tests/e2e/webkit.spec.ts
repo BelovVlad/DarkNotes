@@ -91,8 +91,10 @@ test('WebKit tablet: pen hover rejects resting palms without native selection',a
   await new Promise(resolve=>setTimeout(resolve,850));
   const move=touch('pointermove',200),up=touch('pointerup',200);
   const selection=view.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}));
-  return {initial,final:{top:view.scrollTop,width:canvas.getBoundingClientRect().width},down,move,up,selection};
+  const text=document.createTextNode('selection target');view.append(text);
+  const textSelection=text.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}));text.remove();
+  return {initial,final:{top:view.scrollTop,width:canvas.getBoundingClientRect().width},down,move,up,selection,textSelection};
  });
- expect(result.final).toEqual(result.initial);expect([result.down,result.move,result.up,result.selection]).toEqual([false,false,false,false]);
+ expect(result.final).toEqual(result.initial);expect([result.down,result.move,result.up,result.selection,result.textSelection]).toEqual([false,false,false,false,false]);
  expect((await current(page)).pages[0].objects).toEqual([]);
 });

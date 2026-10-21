@@ -49,7 +49,7 @@ export function Editor({document:doc,settings,onUpdate,onBack,onSettings,saveSta
  useEffect(()=>{
   const view=viewport.current!;
   const guard=new PalmGuard(view,()=>{backgroundPan.current=null;motion.current?.start();});
-  const preventSelection=(e:Event)=>{if(!(e.target as HTMLElement).closest('input,textarea,[contenteditable=true],.textLayer.enabled'))e.preventDefault();};
+  const preventSelection=(e:Event)=>{const target=e.target instanceof Element?e.target:(e.target as Node|null)?.parentElement;if(!target?.closest('input,textarea,[contenteditable=true],.textLayer.enabled'))e.preventDefault();};
   view.addEventListener('selectstart',preventSelection);view.addEventListener('dragstart',preventSelection);
   return()=>{guard.dispose();view.removeEventListener('selectstart',preventSelection);view.removeEventListener('dragstart',preventSelection);};
  },[doc.id]);

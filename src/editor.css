@@ -1,6 +1,7 @@
 /* Writing surface: two small rows, contextual panels, no permanent page rail. */
 :root[data-theme=light] { --bg:#f4f5f6; --bg2:#e9ecef; --side:#fff; --panel:#fff; --panel2:#f3f5f6; --cream:#28323b; --text:#202b34; }
-.editor-shell { position:relative; }
+.editor-shell { position:relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.editor-shell :is(input,textarea,[contenteditable=true]),.editor-shell .textLayer.enabled { user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
 .editor-header { height:48px; min-height:48px; padding:0 12px; gap:10px; z-index:50; }
 .editor-title>input { font-size:13px; padding:0; }
 .editor-title>span { font-size:9px; margin:0; }
@@ -234,7 +235,7 @@
 .brand-icon { display:block; flex-shrink:0; border-radius:23%; }
 .avatar { padding:0; background:none; border:0; }
 .about-symbol { background:none; width:auto; height:auto; border:0; }
-.page-extension { flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:9px; min-height:112px; width:min(430px,100%); padding:16px 16px 48px; color:var(--muted); font-size:12px; opacity:.65; touch-action:none; }
+.page-extension { position:absolute; z-index:30; left:50%; bottom:48px; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; gap:8px; max-width:calc(100% - 24px); padding:9px 13px; border-radius:16px; background:color-mix(in srgb,var(--panel) 85%,transparent); color:var(--muted); font-size:11px; pointer-events:none; }
 .page-extension.ready { color:var(--cream); opacity:1; }
 .editor-shell .compact-page-status { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); width:auto; height:auto; min-height:0; padding:0; border:0; background:transparent; z-index:31; gap:0; }
 .writing-focus .compact-page-status { display:flex; }

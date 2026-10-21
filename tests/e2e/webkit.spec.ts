@@ -77,3 +77,22 @@ test('WebKit tablet: pull beyond the last page creates a blank continuation',asy
  await expect(page.getByRole('button',{name:'Страницы и масштаб',exact:true})).toHaveText('2/2');
  expect((await current(page)).pages[1].objects).toEqual([]);await page.screenshot({path:'test-results/webkit-continuation.png'});
 });
+
+test('WebKit tablet: pen hover rejects resting palms without native selection',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Новая тетрадь',exact:true}).last().click();
+ await page.getByPlaceholder('Например, квантовая механика').fill('Защита ладони');await page.getByRole('dialog').getByRole('button',{name:'Создать тетрадь',exact:true}).click();
+ await expect(page.getByTestId('drawing-canvas')).toBeVisible();
+ const result=await page.getByTestId('page-viewport').evaluate(async view=>{
+  const canvas=view.querySelector('.active-layer')!;
+  const initial={top:view.scrollTop,width:canvas.getBoundingClientRect().width};
+  canvas.dispatchEvent(new PointerEvent('pointermove',{pointerType:'pen',pointerId:5,clientX:300,clientY:300,bubbles:true}));
+  const touch=(type:string,y:number)=>canvas.dispatchEvent(new PointerEvent(type,{pointerType:'touch',pointerId:8,clientX:400,clientY:y,width:10,height:10,bubbles:true,cancelable:true}));
+  const down=touch('pointerdown',500);
+  await new Promise(resolve=>setTimeout(resolve,850));
+  const move=touch('pointermove',200),up=touch('pointerup',200);
+  const selection=view.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}));
+  return {initial,final:{top:view.scrollTop,width:canvas.getBoundingClientRect().width},down,move,up,selection};
+ });
+ expect(result.final).toEqual(result.initial);expect([result.down,result.move,result.up,result.selection]).toEqual([false,false,false,false]);
+ expect((await current(page)).pages[0].objects).toEqual([]);
+});

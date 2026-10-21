@@ -1,0 +1,27 @@
+import { test, expect, type Page } from '@playwright/test';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import fs from 'node:fs/promises';
+async function activeDocument(page:Page){return page.evaluate(async()=>{const id=location.hash.slice(5),db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('darknotes-v1');r.onsuccess=()=>resolve(r.result);});return new Promise<any>(resolve=>{const r=db.transaction('documents').objectStore('documents').get(id);r.onsuccess=()=>{resolve(r.result);db.close();};});});}
+test('exported rotated PDF contains ink at the correct coordinates; editable project restores source PDF and images',async({page,browser})=>{
+ const source=await PDFDocument.create(),pdfPage=source.addPage([600,800]),font=await source.embedFont(StandardFonts.Helvetica);
+ pdfPage.drawText('Physics lecture',{x:40,y:740,font,size:20});
+ await page.goto('/');await expect(page.getByRole('button',{name:'Импорт PDF',exact:true})).toBeVisible();
+ await page.locator('input[type=file]').setInputFiles({name:'physics.pdf',mimeType:'application/pdf',buffer:Buffer.from(await source.save())});
+ await expect(page.getByTestId('drawing-canvas')).toBeVisible();
+ let box=(await page.getByTestId('drawing-canvas').boundingBox())!;
+ await page.mouse.move(box.x+140,box.y+200);await page.mouse.down();await page.mouse.move(box.x+240,box.y+230,{steps:15});await page.mouse.up();
+ await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+ const before=await activeDocument(page),point=before.pages[0].objects[0].points[7];
+ await page.getByRole('button',{name:'Действия со страницей',exact:true}).click();await page.getByRole('button',{name:'Повернуть на 90°',exact:true}).click();
+ await page.getByRole('button',{name:'Экспорт',exact:true}).click();let downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Экспортировать PDF',exact:true}).click();let downloaded=await downloadPromise;const exported=await fs.readFile((await downloaded.path())!);await fs.writeFile('test-results/annotated-rotated.pdf',exported);
+ await page.getByRole('button',{name:'В библиотеку',exact:true}).click();await page.locator('input[type=file]').setInputFiles({name:'exported.pdf',mimeType:'application/pdf',buffer:exported});await expect(page.getByTestId('drawing-canvas')).toBeVisible();
+ const expected={x:800-point.y,y:point.x};
+ await expect.poll(()=>page.evaluate(({x,y})=>{const canvas=document.querySelector<HTMLCanvasElement>('.paper-layer');if(!canvas||canvas.width<500)return 0;const scale=canvas.width/800,ctx=canvas.getContext('2d')!,data=ctx.getImageData(Math.round(x*scale)-5,Math.round(y*scale)-5,11,11).data;let dark=0;for(let i=0;i<data.length;i+=4)if(data[i]<120&&data[i+1]<120&&data[i+2]<120&&data[i+3]>200)dark++;return dark;},expected)).toBeGreaterThan(3);
+ // Return to the editable original, insert a bitmap, and round-trip the project in a new browser context.
+ await page.goto('/#doc/'+before.id);await expect(page.getByTestId('drawing-canvas')).toBeVisible();
+ await page.locator('input[type=file]').setInputFiles('public/icon-192.png');
+ await expect.poll(async()=>(await activeDocument(page)).pages[0].objects.length).toBe(2);
+ await page.getByRole('button',{name:'Экспорт',exact:true}).click();downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Редактируемый проект .darknotes',exact:true}).click();downloaded=await downloadPromise;const project=await fs.readFile((await downloaded.path())!);const archive=JSON.parse(project.toString());expect(archive.assets).toHaveLength(1);expect(archive.documents[0].pages[0].objects.map((o:any)=>o.kind)).toEqual(['stroke','image']);
+ const fresh=await browser.newContext(),restored=await fresh.newPage();try{await restored.goto('/');await expect(restored.getByRole('button',{name:'Импорт PDF',exact:true})).toBeVisible();await restored.locator('input[type=file]').setInputFiles({name:'copy.darknotes',mimeType:'application/json',buffer:project});await expect(restored.getByRole('button',{name:'Открыть physics',exact:true})).toBeVisible();await restored.getByRole('button',{name:'Открыть physics',exact:true}).click();await expect(restored.getByTestId('drawing-canvas')).toBeVisible();const doc=await activeDocument(restored);expect(doc.pages[0].rotation).toBe(90);expect(doc.pages[0].objects).toHaveLength(2);await restored.evaluate(async()=>{await navigator.serviceWorker.ready;});await restored.reload();await expect.poll(()=>restored.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);await fresh.setOffline(true);await restored.reload();await expect(restored.getByTestId('drawing-canvas')).toBeVisible();await expect.poll(()=>restored.locator('.paper-layer').evaluate((c:HTMLCanvasElement)=>c.width)).toBeGreaterThan(500);await restored.screenshot({path:'test-results/restored-pdf-offline.png'});}finally{await fresh.close();}
+});
+test('library is readable on desktop and has no horizontal overflow',async({page})=>{await page.goto('/');await expect(page.getByRole('heading',{name:'Все документы.'})).toBeVisible();await page.screenshot({path:'test-results/library-desktop.png',fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(1440);});

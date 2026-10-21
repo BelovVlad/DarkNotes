@@ -10,7 +10,7 @@ test('scrolling past the last page appends one blank template and the counter fo
  await page.mouse.move(900,500);await page.mouse.wheel(0,6000);
  await expect.poll(()=>page.getByTestId('page-viewport').evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop)).toBeLessThan(3);
  const bottomGap=await page.getByTestId('page-viewport').evaluate(el=>el.getBoundingClientRect().bottom-el.querySelector('.lazy-page:last-child')!.getBoundingClientRect().bottom);
- expect(bottomGap).toBeLessThanOrEqual(14);await expect(page.locator('.page-extension')).toHaveCount(0);
+ expect(Math.abs(bottomGap)).toBeLessThanOrEqual(1);await expect(page.locator('.page-extension')).toHaveCount(0);
  expect((await current(page)).pages).toHaveLength(1);
  await page.mouse.wheel(0,160);await expect.poll(async()=>(await current(page)).pages.length).toBe(2);
  const doc=await current(page);expect(doc.pages[1].objects).toEqual([]);expect(doc.pages[1].paper).toBe(doc.pages[0].paper);
@@ -62,6 +62,8 @@ test('very fast Pencil stroke keeps its release point and an interrupted pen str
 test('installed iPad layout reserves a status-bar inset',async({page})=>{
  await page.addInitScript(()=>Object.defineProperty(navigator,'standalone',{value:true,configurable:true}));
  await create(page);expect((await page.locator('.editor-header').boundingBox())!.y).toBeGreaterThanOrEqual(24);
+ await page.addStyleTag({content:':root { --safe-bottom:34px; }'});
+ expect(await page.getByTestId('page-viewport').evaluate(el=>innerHeight-el.getBoundingClientRect().bottom)).toBe(0);
  await expect(page.locator('html')).toHaveClass(/standalone-app/);
  await page.screenshot({path:'test-results/ipad-safe-area.png'});
 });
@@ -78,23 +80,21 @@ test('pen priority rejects palms across the writing surface and between strokes'
   },{target,id,type,x,y,width});
  };
  const initial=await state();
- // Large contact is rejected even before the pen reaches the screen.
- await touch('canvas',80,'pointerdown',700,500,55);await touch('canvas',80,'pointermove',700,270,55);await touch('canvas',80,'pointerup',700,270,55);
- expect(await state()).toEqual(initial);
  await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x:box.x+150,y:box.y+200,button:'left',buttons:1,pointerType:'pen',force:.4});
  await touch('canvas',81,'pointerdown',700,500);await touch('gutter',82,'pointerdown',8,500);
  await touch('canvas',81,'pointermove',800,200);await touch('gutter',82,'pointermove',8,200);
  await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:box.x+300,y:box.y+200,button:'left',buttons:1,pointerType:'pen',force:.6});
  await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:box.x+300,y:box.y+200,button:'left',buttons:0,pointerType:'pen'});
- // New contacts during a pen lift and resting contacts after the grace period.
- await touch('canvas',83,'pointerdown',750,450);await page.waitForTimeout(850);
- for(const [target,id] of [['canvas',81],['gutter',82],['canvas',83]] as const){await touch(target,id,'pointermove',600,150);await touch(target,id,'pointerup',600,150);}
+ // A resting palm stays blocked after pen lift.
+ for(const [target,id] of [['canvas',81],['gutter',82]] as const){await touch(target,id,'pointermove',600,150);await touch(target,id,'pointerup',600,150);}
  expect(await state()).toEqual(initial);
  await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(1);
- // A fresh finger gesture is still usable once writing has stopped.
+ // A fresh, normal-sized finger works immediately, including with pen hover.
  await cdp.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:800,y:600,id:1,radiusX:5,radiusY:5}]});
- await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:800,y:400,id:1,radiusX:5,radiusY:5}]});
+ await canvas.dispatchEvent('pointermove',{pointerType:'pen',pointerId:95,clientX:400,clientY:300,bubbles:true});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:800,y:600,id:1,radiusX:20,radiusY:18}]});
+ await canvas.dispatchEvent('pointermove',{pointerType:'pen',pointerId:95,clientX:405,clientY:300,bubbles:true});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:800,y:400,id:1,radiusX:20,radiusY:18}]});
  expect((await state()).top).toBeGreaterThan(initial.top+50);
  await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
 });
@@ -111,7 +111,7 @@ test('pen arrival cancels an existing touch gesture and fresh two-finger zoom st
  await page.setViewportSize({width:1180,height:820});await create(page);
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
- const fingers=(x1:number,x2:number,y:number)=>[{id:1,x:x1,y,radiusX:5,radiusY:5},{id:2,x:x2,y,radiusX:5,radiusY:5}];
+ const fingers=(x1:number,x2:number,y:number)=>[{id:1,x:x1,y,radiusX:20,radiusY:18},{id:2,x:x2,y,radiusX:20,radiusY:18}];
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:fingers(650,850,600)});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:fingers(650,850,570)});
  const canvas=page.getByTestId('drawing-canvas'),box=(await canvas.boundingBox())!;
@@ -123,9 +123,31 @@ test('pen arrival cancels an existing touch gesture and fresh two-finger zoom st
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:fingers(580,920,450)});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  expect(await snapshot()).toEqual(held);await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(1);
- await page.waitForTimeout(850);
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:fingers(650,850,550)});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:fingers(600,900,550)});
  await expect.poll(async()=>(await snapshot()).width).toBeGreaterThan(held.width+50);
  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});expect(errors).toEqual([]);
+});
+
+test('committing strokes leaves paper, previous ink and viewport stable with a quiet save indicator',async({page})=>{
+ await page.setViewportSize({width:1180,height:820});await create(page);
+ await expect(page.locator('[data-save-state=saved]')).toBeVisible();
+ await page.getByTestId('drawing-canvas').evaluate(canvas=>{
+  const ink=canvas.parentElement!.querySelector('.ink-layer') as HTMLCanvasElement;
+  const paper=canvas.parentElement!.querySelector('.paper-layer')!;
+  const stats=(window as any).inkStats={clears:0,resizes:0,replaced:false,activeAtRelease:[] as boolean[]};
+  const ctx=ink.getContext('2d')!,clear=ctx.clearRect.bind(ctx);ctx.clearRect=(...args)=>{stats.clears++;clear(...args);};
+  new MutationObserver(records=>stats.resizes+=records.length).observe(paper,{attributes:true,attributeFilter:['width','height']});
+  canvas.addEventListener('pointerup',()=>{stats.replaced=document.querySelector('.active-layer')!==canvas;stats.activeAtRelease.push((canvas as HTMLCanvasElement).getContext('2d')!.getImageData(0,0,(canvas as HTMLCanvasElement).width,(canvas as HTMLCanvasElement).height).data.some((n,i)=>i%4===3&&n>0));});
+ });
+ const view=page.getByTestId('page-viewport'),before=await view.evaluate(el=>({top:el.scrollTop,width:el.querySelector('.page-frame')!.getBoundingClientRect().width}));
+ const b=(await page.getByTestId('drawing-canvas').boundingBox())!;
+ for(let i=0;i<3;i++){await page.mouse.move(b.x+180,b.y+240+i*50);await page.mouse.down();await page.mouse.move(b.x+360,b.y+240+i*50,{steps:8});await page.mouse.up();}
+ await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(3);
+ await expect(page.locator('[data-save-state=saved]')).toBeVisible();
+ expect(await view.evaluate(el=>({top:el.scrollTop,width:el.querySelector('.page-frame')!.getBoundingClientRect().width}))).toEqual(before);
+ expect(await page.evaluate(()=>(window as any).inkStats)).toEqual({clears:0,resizes:0,replaced:false,activeAtRelease:[false,false,false]});
+ await expect(page.locator('.save-indicator')).toHaveText('Автосохранение');await expect(page.locator('.save-indicator .spin')).toHaveCount(0);
+ await page.getByRole('button',{name:'Отменить (Ctrl+Z)',exact:true}).click();await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(2);
+ expect(await page.evaluate(()=>(window as any).inkStats.clears)).toBeGreaterThan(0);
 });

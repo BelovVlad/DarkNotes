@@ -10,7 +10,7 @@ test('exported rotated PDF contains ink at the correct coordinates; editable pro
  await expect(page.getByTestId('drawing-canvas')).toBeVisible();
  let box=(await page.getByTestId('drawing-canvas').boundingBox())!;
  await page.mouse.move(box.x+140,box.y+200);await page.mouse.down();await page.mouse.move(box.x+240,box.y+230,{steps:15});await page.mouse.up();
- await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+ await expect(page.locator('[data-save-state=saved]')).toBeVisible();
  const before=await activeDocument(page),point=before.pages[0].objects[0].points[7];
  await page.getByRole('button',{name:'Действия со страницей',exact:true}).click();await page.getByRole('button',{name:'Повернуть на 90°',exact:true}).click();
  await page.getByRole('button',{name:'Экспорт',exact:true}).click();let downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Экспортировать PDF',exact:true}).click();await page.getByRole('button',{name:'Белый для печати',exact:false}).click();await page.getByRole('button',{name:'Скачать PDF',exact:true}).click();let downloaded=await downloadPromise;const exported=await fs.readFile((await downloaded.path())!);await fs.writeFile('test-results/annotated-rotated.pdf',exported);

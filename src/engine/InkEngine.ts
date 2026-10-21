@@ -46,7 +46,14 @@ export class InkEngine {
   private clearTimer(){if(this.holdTimer)clearTimeout(this.holdTimer);this.holdTimer=undefined;}
   clearSelection(){this.selected.clear();this.options.onSelection(0);this.paint();}
   private choose(ids:string[]){this.selected=new Set(ids);this.options.onSelection(ids.length);this.paint();}
-  private commit(objects:InkObject[]){this.objects=objects;this.index=new SpatialIndex(objects);this.options.onChange(objects);this.redrawStatic();this.paint();}
+  private commit(objects:InkObject[]){
+    const added=objects.at(-1),append=objects.length===this.objects.length+1&&added?.kind==='stroke'&&this.objects.every((o,i)=>o===objects[i]);
+    this.objects=objects;this.index=new SpatialIndex(objects);
+    // Transfer the finished stroke in one frame, without clearing older ink.
+    if(this.mode==='draw'||this.mode==='contour-hold')this.activeCanvas.getContext('2d')!.clearRect(0,0,this.options.page.width,this.options.page.height);
+    if(append)drawObject(this.staticCanvas.getContext('2d')!,added!,this.options.darkPaper);else this.redrawStatic();
+    this.options.onChange(objects);this.paint();
+  }
   private down=(e:PointerEvent)=>{if(e.button!==0&&e.button!==5)return;e.preventDefault();this.options.onNavigationStart?.();if(e.pointerType==='touch'&&this.penActive)return;if(e.pointerType==='pen'){this.penActive=true;this.pointers.clear();}this.activeCanvas.setPointerCapture(e.pointerId);this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});if(e.pointerType==='touch'&&this.pointers.size>=2){this.clearTimer();if(this.mode==='erase'||this.mode==='move'){this.objects=this.original;this.redrawStatic();}this.mode='navigate';this.stroke=null;this.singleTouchStart=null;this.touchStart=e.timeStamp;this.touchTravel=0;this.touchBaseline=this.touchInfo();this.paint();return;}this.currentId=e.pointerId;const p=this.point(e);this.origin=p;this.last=p;this.original=this.objects;this.shapeLocked=false;this.holdPosition=p;
     if(this.options.tool==='hand'||e.pointerType==='touch'&&this.options.settings.penOnly){this.mode='navigate';if(e.pointerType==='touch'){this.singleTouchStart={x:e.clientX,y:e.clientY};this.singleTouchAt=e.timeStamp;}return;}
     const b=this.selectionBounds();if(b&&contains(b,p,12/this.options.scale)){this.mode='move';return;}

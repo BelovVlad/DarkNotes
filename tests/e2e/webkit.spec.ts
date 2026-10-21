@@ -20,7 +20,12 @@ test('WebKit tablet: ink, undo/redo, palette, rotation and offline persistence',
   await page.goto('/'); await page.getByRole('button', { name: 'Новая тетрадь', exact: true }).last().click();
   await page.getByPlaceholder('Например, квантовая механика').fill('WebKit · конспект');
   await page.getByRole('dialog').getByRole('button', { name: 'Создать тетрадь', exact: true }).click();
-  await expect(page.getByTestId('drawing-canvas')).toBeVisible(); await draw(page);
+  await expect(page.getByTestId('drawing-canvas')).toBeVisible();
+  const view=page.getByTestId('page-viewport'),before=await view.evaluate(el=>({top:el.scrollTop,width:el.querySelector('.page-frame')!.getBoundingClientRect().width}));
+  await page.locator('.paper-layer').first().evaluate(canvas=>{(window as any).paperResizes=0;new MutationObserver(records=>(window as any).paperResizes+=records.length).observe(canvas,{attributes:true,attributeFilter:['width','height']});});
+  await draw(page);await expect(page.locator('[data-save-state=saved]')).toBeVisible();
+  expect(await view.evaluate(el=>({top:el.scrollTop,width:el.querySelector('.page-frame')!.getBoundingClientRect().width}))).toEqual(before);
+  expect(await page.evaluate(()=>(window as any).paperResizes)).toBe(0);await expect(page.locator('.save-indicator')).toHaveText('Автосохранение');
   const saved = (await current(page)).pages[0].objects;
   await page.getByRole('button', { name: 'Отменить (Ctrl+Z)', exact: true }).click();
   await expect.poll(async () => (await current(page)).pages[0].objects.length).toBe(0);
@@ -62,6 +67,7 @@ test('WebKit tablet: PDF annotations, searchable export and editable project bac
   await page.getByRole('button', { name: 'Скачать PDF', exact: true }).click();
   const bytes = await fs.readFile((await (await download).path())!); expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
   await page.getByRole('button', { name: 'В библиотеку', exact: true }).click();
+  await expect(page.getByRole('button',{name:'Импорт PDF',exact:true})).toBeVisible();
   await page.locator('input[type=file]').setInputFiles({ name: 'export.pdf', mimeType: 'application/pdf', buffer: bytes });
   await expect(page.getByTestId('drawing-canvas')).toBeVisible(); await page.getByRole('button', { name: 'Показать страницы', exact: true }).click();
   await page.getByRole('textbox', { name: 'Поиск по тексту PDF' }).fill('physics'); await expect(page.getByRole('button', { name: /Стр. 1/ })).toBeVisible();
@@ -75,20 +81,27 @@ test('WebKit tablet: pull beyond the last page creates a blank continuation',asy
  const drag=async()=>{const b=(await page.getByTestId('drawing-canvas').boundingBox())!;const y=Math.max(350,Math.min(700,b.y+400));await page.mouse.move(400,y);await page.mouse.down();await page.mouse.move(400,y-250,{steps:8});await page.mouse.up();};
  await drag();await expect.poll(async()=>(await current(page)).pages.length).toBe(2);
  await expect(page.getByRole('button',{name:'Страницы и масштаб',exact:true})).toHaveText('2/2');
- expect((await current(page)).pages[1].objects).toEqual([]);await page.screenshot({path:'test-results/webkit-continuation.png'});
+ await page.addStyleTag({content:':root { --safe-bottom:34px; }'});
+ await page.getByTestId('page-viewport').evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ await expect.poll(()=>page.getByTestId('page-viewport').evaluate(el=>Math.abs(innerHeight-el.querySelector('.lazy-page:last-child')!.getBoundingClientRect().bottom))).toBeLessThanOrEqual(1);
+ expect((await current(page)).pages[1].objects).toEqual([]);
+ const dismiss=page.getByRole('button',{name:'Закрыть уведомление',exact:true});if(await dismiss.isVisible())await dismiss.click();
+ await page.screenshot({path:'test-results/webkit-continuation.png'});
 });
 
-test('WebKit tablet: pen hover rejects resting palms without native selection',async({page})=>{
+test('WebKit tablet: resting palms stay blocked after pen lift without native selection',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Новая тетрадь',exact:true}).last().click();
  await page.getByPlaceholder('Например, квантовая механика').fill('Защита ладони');await page.getByRole('dialog').getByRole('button',{name:'Создать тетрадь',exact:true}).click();
  await expect(page.getByTestId('drawing-canvas')).toBeVisible();
  const result=await page.getByTestId('page-viewport').evaluate(async view=>{
   const canvas=view.querySelector('.active-layer')!;
   const initial={top:view.scrollTop,width:canvas.getBoundingClientRect().width};
-  canvas.dispatchEvent(new PointerEvent('pointermove',{pointerType:'pen',pointerId:5,clientX:300,clientY:300,bubbles:true}));
+  // Guard admission is tested independently of native pointer capture here.
+  canvas.addEventListener('pointerdown',e=>{if((e as PointerEvent).pointerType==='pen')e.stopImmediatePropagation();},{capture:true,once:true});
+  canvas.dispatchEvent(new PointerEvent('pointerdown',{pointerType:'pen',pointerId:5,clientX:300,clientY:300,bubbles:true}));
   const touch=(type:string,y:number)=>canvas.dispatchEvent(new PointerEvent(type,{pointerType:'touch',pointerId:8,clientX:400,clientY:y,width:10,height:10,bubbles:true,cancelable:true}));
   const down=touch('pointerdown',500);
-  await new Promise(resolve=>setTimeout(resolve,850));
+  canvas.dispatchEvent(new PointerEvent('pointerup',{pointerType:'pen',pointerId:5,bubbles:true}));
   const move=touch('pointermove',200),up=touch('pointerup',200);
   const selection=view.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}));
   const text=document.createTextNode('selection target');view.append(text);

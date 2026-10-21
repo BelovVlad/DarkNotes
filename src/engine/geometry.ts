@@ -15,7 +15,24 @@ export function hitObject(o: InkObject,p: XY,r: number) { if(o.kind!=='stroke')r
 export function isClosed(points: Point[]) { if(points.length<10)return false;const b=bounds(points);let len=0;for(let i=1;i<points.length;i++)len+=distance(points[i-1],points[i]);const end=distance(points[0],points.at(-1)!);let area=0;for(let i=0;i<points.length;i++){const a=points[i],n=points[(i+1)%points.length];area+=a.x*n.y-n.x*a.y;}return b.w>25&&b.h>25&&end<Math.max(12,Math.min(b.w,b.h)*.22)&&Math.abs(area)/2>b.w*b.h*.15&&len>Math.max(b.w,b.h)*2; }
 // Require rapid backtracking along a stable axis; slow hatching and mathematical symbols stay ink.
 export function isScribble(points: Point[]) { if(points.length<12||isClosed(points))return false;const duration=points.at(-1)!.t-points[0].t;if(duration<=0||duration>1600)return false;const b=bounds(points);const axis=b.w>=b.h?'x':'y', span=Math.max(b.w,b.h);if(span<24)return false;let reversals=0,last=0,anchor=points[0][axis],travel=0;for(let i=1;i<points.length;i++){travel+=distance(points[i-1],points[i]);const delta=points[i][axis]-anchor;if(Math.abs(delta)>Math.max(9,span*.3)){const dir=Math.sign(delta);if(last&&dir!==last)reversals++;last=dir;anchor=points[i][axis];}}return reversals>=5&&travel/duration>.45&&travel>span*4.5&&Math.min(b.w,b.h)<span*.8; }
-export function scribbleTargets(objects: InkObject[],points: Point[]) { return objects.filter(o=>o.kind==='stroke'&&o.points.some((p,i)=>points.some((q,j)=>j>0&&segmentsDistance(o.points[Math.max(0,i-1)],p,points[j-1],q)<6+o.width))).map(o=>o.id); }
+export function scribbleTargets(objects: InkObject[], points: Point[]) {
+ const box=bounds(points),axis=box.w>=box.h?'x':'y';
+ return objects.filter(object=>{
+  if(object.kind!=='stroke')return false;
+  let passes=0,lastDirection=0;
+  for(let j=1;j<points.length;j++){
+   const a=points[j-1],b=points[j],delta=b[axis]-a[axis];
+   if(Math.abs(delta)<2)continue;
+   const direction=Math.sign(delta);
+   if(direction===lastDirection)continue;
+   if(object.points.some((point,i)=>segmentsDistance(object.points[Math.max(0,i-1)],point,a,b)<6+object.width)){
+    passes++;lastDirection=direction;
+    if(passes>=3)return true;
+   }
+  }
+  return false;
+ }).map(object=>object.id);
+}
 export function translate(o: InkObject,dx: number,dy: number): InkObject { return o.kind==='stroke'?{...o,points:o.points.map(p=>({...p,x:p.x+dx,y:p.y+dy}))}:{...o,x:o.x+dx,y:o.y+dy}; }
 export function scaleObject(o: InkObject,b: Bounds,factor: number): InkObject { if(o.kind==='stroke')return{...o,width:o.width*factor,points:o.points.map(p=>({...p,x:b.x+(p.x-b.x)*factor,y:b.y+(p.y-b.y)*factor}))};return{...o,x:b.x+(o.x-b.x)*factor,y:b.y+(o.y-b.y)*factor,width:o.width*factor,height:o.height*factor,...(o.kind==='text'?{size:o.size*factor}:{})}; }
 export function eraseAt(objects: InkObject[],p: XY,r: number,whole: boolean): InkObject[] { return objects.flatMap(o=>{if(!hitObject(o,p,r))return[o];if(whole)return[];if(o.kind!=='stroke')return[o];const fragments: Point[][]=[];let fragment: Point[]=[];for(let i=0;i<o.points.length;i++){const a=o.points[i],b=o.points[Math.max(0,i-1)];const steps=Math.max(1,Math.ceil(distance(a,b)/Math.max(1,r/3)));for(let s=1;s<=steps;s++){const t=s/steps,q={...a,x:b.x+(a.x-b.x)*t,y:b.y+(a.y-b.y)*t};if(distance(q,p)<r+o.width/2){if(fragment.length)fragments.push(fragment);fragment=[];}else fragment.push(q);}}if(fragment.length)fragments.push(fragment);return fragments.filter(f=>f.length>1).map(points=>({...o,id:uid(),points}));}); }

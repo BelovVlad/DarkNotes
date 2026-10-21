@@ -1,9 +1,20 @@
+import Dexie, { type Table } from 'dexie';
 import { defaultSettings, type Folder, type NoteDocument, type Settings } from './model';
-const DB = 'darknotes-v1';
-let opening: Promise<IDBDatabase> | undefined;
-export function database(): Promise<IDBDatabase> { return opening ||= new Promise((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{for(const name of ['documents','previous','folders','assets','settings'])r.result.createObjectStore(name,{keyPath:'id'});};r.onsuccess=()=>{r.result.onversionchange=()=>r.result.close();resolve(r.result);};r.onerror=()=>reject(r.error);}); }
-function request<T>(r: IDBRequest<T>) { return new Promise<T>((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
-function complete(tx: IDBTransaction) { return new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error||new Error('Транзакция отменена'));tx.onerror=()=>reject(tx.error);}); }
+
+const db = new Dexie('darknotes-v1', { chromeTransactionDurability: 'strict', cache: 'disabled' });
+// Dexie uses native IDB version / 10. Adopt the original native v1 without
+// replacing stores, then add indexes in native v10. Existing notes and PDF blobs stay in place.
+db.version(0.1).stores({ documents: 'id', previous: 'id', folders: 'id', assets: 'id', settings: 'id' });
+db.version(1).stores({ documents: 'id,folderId,updated', previous: 'id', folders: 'id,parentId', assets: 'id', settings: 'id' });
+const documents: Table<NoteDocument, string> = db.table('documents');
+const previous: Table<NoteDocument, string> = db.table('previous');
+const folders: Table<Folder, string> = db.table('folders');
+// Store newly imported bytes directly: file-backed Blob handles can fail to
+// serialize in WebKit. Continue reading Blob records written by earlier builds.
+const assets: Table<{ id: string; blob?: Blob; bytes?: ArrayBuffer }, string> = db.table('assets');
+const preferences: Table<{ id: string; value: Settings }, string> = db.table('settings');
+export async function database(): Promise<IDBDatabase> { await db.open(); return db.backendDB(); }
+
 export function validDocument(value: unknown): value is NoteDocument {
  if(!value||typeof value!=='object')return false;const d=value as NoteDocument;
  const finite=(n:unknown)=>typeof n==='number'&&Number.isFinite(n),color=(c:unknown)=>typeof c==='string'&&/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(c);
@@ -13,19 +24,108 @@ export function validDocument(value: unknown): value is NoteDocument {
   o.kind==='image'?finite(o.x)&&finite(o.y)&&finite(o.width)&&o.width>0&&finite(o.height)&&o.height>0&&typeof o.data==='string'&&/^data:image\/(png|jpeg|webp|gif|avif|bmp);base64,/i.test(o.data):false)));
 }
 export function normalizeSettings(raw:unknown):Settings {const s=raw&&typeof raw==='object'?raw as Partial<Settings>:{};const result=structuredClone(defaultSettings);for(const key of ['compact','penOnly','pressure','circleLasso','scribbleErase','shapeHold','twoFingerUndo','doubleTapZoom'] as const)if(typeof s[key]==='boolean')result[key]=s[key];if(['dark','light','system'].includes(s.theme||''))result.theme=s.theme!;if(typeof s.accent==='string'&&/^#[a-f0-9]{6}$/i.test(s.accent))result.accent=s.accent;if(Number.isFinite(s.smoothing))result.smoothing=Math.max(0,Math.min(1,s.smoothing!));if(Number.isFinite(s.holdMs))result.holdMs=Math.max(300,Math.min(2000,s.holdMs!));if(s.toolbar==='top'||s.toolbar==='bottom')result.toolbar=s.toolbar;if(s.scroll==='single'||s.scroll==='continuous')result.scroll=s.scroll;if(['pen','highlighter','lasso','hand'].includes(s.defaultTool||''))result.defaultTool=s.defaultTool!;if(Array.isArray(s.presets)&&s.presets.length&&s.presets.every(p=>p&&/^#[a-f0-9]{6}$/i.test(p.color)&&Number.isFinite(p.width)&&p.width>=1&&p.width<=14&&Number.isFinite(p.opacity)&&p.opacity>0&&p.opacity<=1&&['regular','ballpoint','fountain'].includes(p.pen)))result.presets=s.presets.slice(0,8);return result;}
-export async function loadLibrary() { const db=await database();const tx=db.transaction(['documents','folders','settings','previous'],'readonly');const [docs,folders,saved,previous] = await Promise.all([request<unknown[]>(tx.objectStore('documents').getAll()),request<Folder[]>(tx.objectStore('folders').getAll()),request<{id:string;value:Settings}|undefined>(tx.objectStore('settings').get('main')),request<NoteDocument[]>(tx.objectStore('previous').getAll())]);const recovered:string[]=[];const documents=docs.flatMap(d=>{if(validDocument(d))return[d];const id=(d as {id?:string})?.id;const old=previous.find(v=>v.id===id&&validDocument(v));if(old){recovered.push(old.id);return[old];}return[];});return{documents,folders,settings:normalizeSettings(saved?.value),recovered}; }
-let queue = Promise.resolve();
-export function saveDocument(doc: NoteDocument) { if(!validDocument(doc))return Promise.reject(new Error('Некорректный документ: сохранение остановлено'));const value=structuredClone(doc);const operation=queue.catch(()=>{}).then(async()=>{const db=await database();const tx=db.transaction(['documents','previous'],'readwrite',{durability:'strict'});const done=complete(tx),store=tx.objectStore('documents');const get=store.get(value.id);get.onsuccess=()=>{if(validDocument(get.result))tx.objectStore('previous').put(get.result);store.put(value);};await done;});queue=operation;return operation; }
-export async function saveFolders(folders: Folder[]) {const db=await database();const tx=db.transaction('folders','readwrite'),done=complete(tx);const store=tx.objectStore('folders');store.clear();for(const f of folders)store.put(f);await done;}
-export async function saveSettings(value: Settings) {const db=await database();const tx=db.transaction('settings','readwrite'),done=complete(tx);tx.objectStore('settings').put({id:'main',value});await done;}
-export async function putAsset(id: string,blob: Blob) {const db=await database();const tx=db.transaction('assets','readwrite'),done=complete(tx);tx.objectStore('assets').put({id,blob});await done;}
-export async function getAsset(id: string): Promise<Blob> {const db=await database();const result=await request<{id:string;blob:Blob}|undefined>(db.transaction('assets').objectStore('assets').get(id));if(!result)throw new Error('Исходный PDF не найден. Восстановите документ из резервной копии.');return result.blob;}
-export async function purgeDocument(doc: NoteDocument) {await queue.catch(()=>{});const db=await database();const tx=db.transaction(['documents','previous'],'readwrite'),done=complete(tx);tx.objectStore('documents').delete(doc.id);tx.objectStore('previous').delete(doc.id);await done;}
-export async function flushSaves() {await queue;}
-export function download(blob: Blob,name: string) {const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
-const blobToData = (blob: Blob) => new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});
-export async function backup(documents: NoteDocument[],folders: Folder[],settings: Settings) {await queue.catch(()=>{});const ids=[...new Set(documents.flatMap(d=>d.pdfAsset?[d.pdfAsset]:[]))];const assets=await Promise.all(ids.map(async id=>({id,data:await blobToData(await getAsset(id))})));return new Blob([JSON.stringify({format:'darknotes',version:1,created:new Date().toISOString(),documents,folders,settings,assets})],{type:'application/json'});}
+export async function loadLibrary() {
+  return db.transaction('r', [documents, folders, preferences, previous], async () => {
+    const [docs, storedFolders, saved, old] = await Promise.all([
+      documents.toArray(), folders.toArray(), preferences.get('main'), previous.toArray(),
+    ]);
+    const recovered: string[] = [];
+    const valid = docs.flatMap((value: unknown) => {
+      if (validDocument(value)) return [value];
+      const id = (value as { id?: string } | null)?.id;
+      const fallback = old.find(item => item.id === id && validDocument(item));
+      if (fallback) { recovered.push(fallback.id); return [fallback]; }
+      return [];
+    });
+    return { documents: valid, folders: storedFolders, settings: normalizeSettings(saved?.value), recovered };
+  });
+}
+let queue: Promise<void> = Promise.resolve();
+export function saveDocument(doc: NoteDocument) {
+  if (!validDocument(doc)) return Promise.reject(new Error('Некорректный документ: сохранение остановлено'));
+  const value = structuredClone(doc);
+  const operation = queue.catch(() => {}).then(() => db.transaction('rw', [documents, previous], async () => {
+    const old = await documents.get(value.id);
+    if (validDocument(old)) await previous.put(old);
+    await documents.put(value);
+  }));
+  queue = operation;
+  return operation;
+}
+export async function saveFolders(value: Folder[]) {
+  validateFolderTree(value);
+  await db.transaction('rw', folders, async () => { await folders.clear(); if (value.length) await folders.bulkPut(value); });
+}
+export async function saveSettings(value: Settings) { await preferences.put({ id: 'main', value: normalizeSettings(value) }); }
+export async function putAsset(id: string, blob: Blob) { await assets.put({ id, bytes: await blob.arrayBuffer() }); }
+export async function getAsset(id: string): Promise<Blob> {
+  const result = await assets.get(id);
+  if (result?.bytes) return new Blob([result.bytes], { type: 'application/pdf' });
+  if (result?.blob) return result.blob;
+  throw new Error('Исходный PDF не найден. Восстановите документ из резервной копии.');
+}
+export async function purgeDocument(doc: NoteDocument) {
+  await queue.catch(() => {});
+  // Duplicated PDF documents share the original blob. Reclaim it only after the
+  // last referencing document (including recoverable trash) has been removed.
+  await db.transaction('rw', [documents, previous, assets], async () => {
+    await documents.delete(doc.id); await previous.delete(doc.id);
+    if (doc.pdfAsset) {
+      const [current, recovery] = await Promise.all([documents.toArray(), previous.toArray()]);
+      if (![...current, ...recovery].some(item => item.pdfAsset === doc.pdfAsset)) await assets.delete(doc.pdfAsset);
+    }
+  });
+}
+export async function flushSaves() { await queue; }
+export function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+  anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+const blobToData = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob);
+});
+export async function backup(docs: NoteDocument[], storedFolders: Folder[], settings: Settings) {
+  await queue.catch(() => {});
+  const ids = [...new Set(docs.flatMap(doc => doc.pdfAsset ? [doc.pdfAsset] : []))];
+  const storedAssets = await Promise.all(ids.map(async id => ({ id, data: await blobToData((await getAsset(id)).slice(0, undefined, 'application/pdf')) })));
+  return new Blob([JSON.stringify({ format: 'darknotes', version: 1, created: new Date().toISOString(), documents: docs, folders: storedFolders, settings, assets: storedAssets })], { type: 'application/json' });
+}
 function validateFolderTree(folders: Folder[]) {const map=new Map(folders.map(f=>[f.id,f]));if(map.size!==folders.length)throw new Error('Повторяющиеся папки');for(const f of folders){const seen=new Set<string>();let current:Folder|undefined=f;while(current){if(seen.has(current.id))throw new Error('Цикл в структуре папок');seen.add(current.id);if(current.parentId&&!map.has(current.parentId))throw new Error('Родительская папка не найдена');current=current.parentId?map.get(current.parentId):undefined;}}}
-// Validate the entire archive before a single atomic import; current files remain untouched.
-export async function restoreBackup(file: File): Promise<number> {if(file.size>500*1024*1024)throw new Error('Резервная копия превышает 500 МБ');const data=JSON.parse(await file.text());if(data.format!=='darknotes'||data.version!==1||!Array.isArray(data.documents)||!data.documents.every(validDocument)||!Array.isArray(data.folders)||!Array.isArray(data.assets))throw new Error('Это не резервная копия DarkNotes версии 1');if(!data.folders.every((f:Folder)=>typeof f.id==='string'&&typeof f.title==='string'))throw new Error('Повреждён список папок');validateFolderTree(data.folders);const available=new Set(data.assets.map((a:{id:string})=>a.id));for(const doc of data.documents as NoteDocument[])if(doc.pdfAsset&&!available.has(doc.pdfAsset))throw new Error('В копии отсутствует исходный PDF');const assets=await Promise.all(data.assets.map(async(a:{id:string;data:string})=>{if(typeof a.id!=='string'||!a.data.startsWith('data:'))throw new Error('Повреждён PDF в копии');return{id:a.id,blob:await(await fetch(a.data)).blob()};}));await flushSaves();const db=await database();const tx=db.transaction(['documents','previous','folders','assets','settings'],'readwrite'),done=complete(tx);for(const d of data.documents){const r=tx.objectStore('documents').get(d.id);r.onsuccess=()=>{if(validDocument(r.result))tx.objectStore('previous').put(r.result);tx.objectStore('documents').put(d);};}for(const f of data.folders)tx.objectStore('folders').put(f);for(const a of assets)tx.objectStore('assets').put(a);if(data.settings)tx.objectStore('settings').put({id:'main',value:normalizeSettings(data.settings)});await done;return data.documents.length;}
+// Validate and decode before opening the single atomic write transaction.
+export async function restoreBackup(file: File): Promise<number> {
+  if (file.size > 500 * 1024 * 1024) throw new Error('Резервная копия превышает 500 МБ');
+  const data = JSON.parse(await file.text());
+  if (data?.format !== 'darknotes' || data.version !== 1 || !Array.isArray(data.documents) || !data.documents.every(validDocument) || !Array.isArray(data.folders) || !Array.isArray(data.assets)) throw new Error('Это не резервная копия DarkNotes версии 1');
+  if (!data.folders.every((folder: Folder) => folder && typeof folder.id === 'string' && typeof folder.title === 'string' && (folder.parentId === null || typeof folder.parentId === 'string'))) throw new Error('Повреждён список папок');
+  validateFolderTree(data.folders);
+  if (new Set(data.documents.map((doc: NoteDocument) => doc.id)).size !== data.documents.length) throw new Error('Повторяющиеся документы');
+  const decoded = data.assets.map((asset: { id: string; data: string }) => {
+    if (!asset || typeof asset.id !== 'string' || typeof asset.data !== 'string' || !/^data:(?:application\/(?:pdf|octet-stream))?;base64,/i.test(asset.data)) throw new Error('Повреждён PDF в копии');
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(asset.data.slice(asset.data.indexOf(',') + 1)), char => char.charCodeAt(0)); }
+    catch { throw new Error('Повреждён PDF в копии'); }
+    if (!new TextDecoder().decode(bytes.slice(0, 1024)).includes('%PDF-')) throw new Error('Повреждён PDF в копии');
+    return { id: asset.id, bytes: bytes.buffer as ArrayBuffer };
+  });
+  const available = new Set(decoded.map((asset: { id: string }) => asset.id));
+  if (available.size !== decoded.length) throw new Error('Повторяющиеся исходные PDF');
+  for (const doc of data.documents as NoteDocument[]) if (doc.pdfAsset && !available.has(doc.pdfAsset)) throw new Error('В копии отсутствует исходный PDF');
+  await flushSaves();
+  await db.transaction('rw', [documents, previous, folders, assets, preferences], async () => {
+    // Archives merge with this library. Validate the combined tree as well: a
+    // valid imported tree can otherwise introduce a cycle with existing folders.
+    const merged = new Map((await folders.toArray()).map(folder => [folder.id, folder]));
+    for (const folder of data.folders as Folder[]) merged.set(folder.id, folder);
+    validateFolderTree([...merged.values()]);
+    for (const doc of data.documents as NoteDocument[]) {
+      const old = await documents.get(doc.id);
+      if (validDocument(old)) await previous.put(old);
+      await documents.put(doc);
+    }
+    if (data.folders.length) await folders.bulkPut(data.folders);
+    if (decoded.length) await assets.bulkPut(decoded);
+    if (data.settings) await preferences.put({ id: 'main', value: normalizeSettings(data.settings) });
+  });
+  return data.documents.length;
+}
 export { blobToData };

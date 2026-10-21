@@ -1,7 +1,7 @@
 /* Writing surface: two small rows, contextual panels, no permanent page rail. */
 :root[data-theme=light] { --bg:#f4f5f6; --bg2:#e9ecef; --side:#fff; --panel:#fff; --panel2:#f3f5f6; --cream:#28323b; --text:#202b34; }
 .editor-shell { position:relative; }
-.editor-header { height:48px; min-height:48px; padding:0 12px; gap:10px; z-index:35; }
+.editor-header { height:48px; min-height:48px; padding:0 12px; gap:10px; z-index:50; }
 .editor-title>input { font-size:13px; padding:0; }
 .editor-title>span { font-size:9px; margin:0; }
 .editor-head-actions { gap:2px; }
@@ -46,11 +46,10 @@
 .pen-properties .custom-ink { display:flex; flex-direction:row; align-items:center; justify-content:space-between; }
 .pen-properties input[type=color] { height:36px; width:44px; }
 .page-custom-color { display:flex; justify-content:space-between; align-items:center; padding:5px 10px; color:var(--muted); }
-.tool-dropdown { min-width:242px; }
+.tool-popover { position:fixed; width:242px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 80px); overflow-y:auto; z-index:45; }
 .dropdown { max-height:min(72dvh,620px); overflow-y:auto; }
 .dropdown>button { min-height:40px; font-size:12px; }
 .toolbar-bottom .pen-properties { top:auto; bottom:60px; }
-.toolbar-bottom .tool-dropdown { top:auto; bottom:calc(100% + 8px); }
 .selection-toolbar { bottom:44px; }
 .writing-focus .editor-header,.writing-focus .editor-status { display:none; }
 .writing-focus .pen-properties { top:60px; }
@@ -108,7 +107,6 @@
  .editor-workspace { position:relative; }
  .pages-head>span { font-size:10px; }
  .page-list { padding:0 20px 16px; }
- .tool-dropdown { left:auto; right:-40px; }
  .pen-properties { right:10px; top:104px; }
  .selection-toolbar { max-width:calc(100% - 12px); }
  .editor-title>input { font-size:12px; }
@@ -137,4 +135,55 @@
  .editor-toolbar .icon-button { height:38px; min-height:38px; }
  .editor-status { height:28px; min-height:28px; }
  .pen-properties { top:94px; max-height:calc(100dvh - 106px); }
+}
+
+/* A movable palette leaves the notebook itself as the main interface. */
+.file-menu { z-index:70; min-width:220px; max-width:min(320px,calc(100vw - 24px)); max-height:var(--radix-dropdown-menu-content-available-height); overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:6px; box-shadow:var(--shadow); color:var(--text); }
+.file-menu [role=menuitem],.file-menu [role=menuitemradio] { display:flex; align-items:center; gap:10px; min-height:44px; padding:8px 12px; border-radius:7px; font-size:13px; outline:none; cursor:default; user-select:none; }
+.file-menu [data-highlighted] { background:var(--soft); color:var(--cream); }
+.file-menu [role=menuitem]>span:last-child { margin-left:auto; }
+.file-menu-label { padding:8px 12px; font-size:11px; color:var(--muted); white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
+.file-menu-separator { height:1px; margin:5px 6px; background:var(--line); }
+.file-color { width:15px; height:15px; border-radius:50%; flex-shrink:0; }
+.editor-shell .floating-toolbar {
+ position:absolute; width:max-content; max-width:calc(100% - 16px); height:auto;
+ min-height:56px; padding:5px 6px; gap:2px; flex-wrap:nowrap; overflow:visible;
+ border:1px solid var(--line); border-radius:22px; z-index:36;
+ background:color-mix(in srgb,var(--panel) 94%,transparent);
+ box-shadow:0 10px 32px #0003,0 1px 3px #0002,inset 0 1px 0 #ffffff09;
+ backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+ user-select:none; -webkit-user-select:none;
+}
+.palette-content { display:flex; align-items:center; flex-wrap:nowrap; gap:5px; }
+.palette-content[hidden] { display:none; }
+.floating-toolbar .toolbar-group { padding-right:6px; gap:0; }
+.floating-toolbar .icon-button { width:40px; min-width:40px; height:44px; min-height:44px; border-radius:13px; }
+.floating-toolbar .tools .icon-button.active { background:var(--soft); box-shadow:inset 0 -3px 0 var(--accent); }
+.floating-toolbar .tools .icon-button.active svg { transform:translateY(-2px); }
+.floating-toolbar .tools .icon-button svg { transition:transform .18s ease; }
+.palette-grip { align-self:stretch; width:24px; min-width:24px; display:grid; place-items:center; cursor:grab; touch-action:none; color:var(--muted); border-radius:15px 6px 6px 15px; }
+.floating-toolbar.dragging,.floating-toolbar.dragging .palette-grip { cursor:grabbing; }
+.palette-grip:hover,.palette-grip:focus-visible { background:var(--soft); color:var(--text); }
+.floating-toolbar .palette-collapse { min-width:28px; width:28px; color:var(--muted); }
+.palette-reopen { display:flex; align-items:center; gap:9px; min-height:44px; padding:0 9px; color:var(--cream); }
+.palette-reopen span { font-size:12px; }
+.editor-shell .pen-properties { top:58px; bottom:auto; max-height:calc(100dvh - 106px); z-index:42; }
+.writing-focus .pen-properties { top:8px; }
+.floating-toolbar .color-button.small { width:23px; height:23px; margin:0 4px; }
+.floating-toolbar .width-button { min-width:48px; min-height:44px; }
+.floating-toolbar.collapsed { border-radius:20px; }
+@media(max-width:800px) {
+ .floating-toolbar .color-button.small { display:none; }
+ .palette-content { gap:2px; }
+ .floating-toolbar .toolbar-group { padding-right:4px; }
+}
+@media(max-width:600px) {
+ .editor-shell .floating-toolbar { border-radius:18px; }
+ .palette-content { max-width:calc(100vw - 84px); flex-wrap:wrap; justify-content:center; row-gap:0; }
+ .floating-toolbar .icon-button { width:38px; min-width:38px; }
+ .floating-toolbar .toolbar-group { padding-right:2px; }
+ .floating-toolbar .toolbar-group.tools { order:-1; flex-basis:100%; justify-content:center; border:0; }
+ .floating-toolbar .width-button { display:none; }
+ .floating-toolbar .palette-collapse { width:28px; min-width:28px; }
+ .palette-grip { width:22px; min-width:22px; }
 }

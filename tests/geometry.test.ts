@@ -16,6 +16,10 @@ describe('scribble recognition and false positives',()=>{
  const zigzag=Array.from({length:36},(_,i)=>[i%2?130:40,80+i*.5]);
  it('recognizes repeated rapid reversals, not slow deliberate hatching',()=>{expect(isScribble(points(zigzag,15))).toBe(true);expect(isScribble(points(zigzag,100))).toBe(false);});
  it('only erases ink intersected by the scribble',()=>{const targets=scribbleTargets([stroke([[70,70],[70,120]],'error'),stroke([[200,70],[200,120]],'neighbor')],points(zigzag));expect(targets).toEqual(['error']);});
+ it('preserves a neighboring stroke touched by only the departing tail',()=>{
+  const gesture=points([...zigzag,[180,98],[210,98]]);
+  expect(scribbleTargets([stroke([[70,70],[70,120]],'error'),stroke([[200,70],[200,120]],'neighbor')],gesture)).toEqual(['error']);
+ });
  const math:Record<string,number[][]>={integral:[[40,10],[32,0],[22,6],[20,30],[20,70],[18,95],[7,100],[0,90]],fraction:[[0,50],[100,50]],sigma:[[100,0],[0,0],[50,50],[0,100],[100,100]],alpha:[[80,60],[60,30],[30,35],[20,60],[30,80],[60,75],[80,30],[70,75],[95,80]],arrow:[[0,50],[100,50],[80,30],[100,50],[80,70]],subscript:[[0,0],[8,8],[0,16],[8,24]]};
  for(const [symbol,pairs] of Object.entries(math))it(`does not erase a mathematical ${symbol}`,()=>expect(isScribble(points(pairs))).toBe(false));
  it('does not mistake a normal circle or rectangle for an eraser',()=>{expect(isScribble(circle)).toBe(false);expect(isScribble(points([[0,0],[100,0],[100,100],[0,100],[0,0]]))).toBe(false);});

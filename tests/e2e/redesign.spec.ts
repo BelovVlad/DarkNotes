@@ -48,8 +48,8 @@ test('ordinary eraser sweeps through a stroke, object eraser removes it, both un
 
 test('failed stroke save stays visible and retries the in-memory stroke',async({page})=>{
  await create(page);await expect(page.getByText('Все изменения сохранены')).toBeVisible();
- await page.evaluate(()=>{const original=IDBDatabase.prototype.transaction;(window as any).restoreTransactions=()=>{IDBDatabase.prototype.transaction=original;};IDBDatabase.prototype.transaction=function(names:any,mode:any,options:any){if(mode==='readwrite'&&Array.from(typeof names==='string'?[names]:names).includes('documents'))throw new DOMException('Test quota exhausted','QuotaExceededError');return original.call(this,names,mode,options);};});
- await draw(page);await expect(page.getByRole('alert')).toContainText('Не удалось сохранить');await expect(page.getByText('Ошибка сохранения',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{const original=IDBObjectStore.prototype.put;(window as any).restoreWrites=()=>{IDBObjectStore.prototype.put=original;};IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){if(this.name==='documents')throw new DOMException('Test quota exhausted','QuotaExceededError');return key===undefined?original.call(this,value):original.call(this,value,key);};});
+ await draw(page);await expect(page.getByRole('alert')).toContainText('Не удалось сохранить');await expect(page.getByText('Ошибка сохранения',{exact:true})).toBeVisible();expect((await current(page)).pages[0].objects).toHaveLength(0);
  expect(await page.evaluate(()=>{const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;})).toBe(true);
- await page.evaluate(()=>(window as any).restoreTransactions());await page.getByRole('button',{name:'Повторить сохранение',exact:true}).click();await expect(page.getByText('Все изменения сохранены')).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);expect((await current(page)).pages[0].objects).toHaveLength(1);
+ await page.evaluate(()=>(window as any).restoreWrites());await page.getByRole('button',{name:'Повторить сохранение',exact:true}).click();await expect(page.getByText('Все изменения сохранены')).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);expect((await current(page)).pages[0].objects).toHaveLength(1);
 });

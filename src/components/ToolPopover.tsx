@@ -12,7 +12,8 @@ export function ToolPopover({ anchor, children, onClose, placement = 'bottom', c
     const place = () => {
       const menu = ref.current, element = anchor.current; if (!menu || !element) return;
       const rect = element.getBoundingClientRect(), width = menu.offsetWidth, height = menu.offsetHeight;
-      const minTop = document.querySelector('.editor-shell')?.classList.contains('header-hidden') || document.querySelector('.writing-focus') ? 8 : 56;
+      const shell=document.querySelector('.editor-shell');
+      const minTop=(shell?.getBoundingClientRect().top||0)+(shell?.classList.contains('header-hidden')||shell?.classList.contains('writing-focus')?8:56);
       const candidates = {
         bottom: { left: rect.left + (rect.width - width) / 2, top: rect.bottom + 10 },
         top: { left: rect.left + (rect.width - width) / 2, top: rect.top - height - 10 },

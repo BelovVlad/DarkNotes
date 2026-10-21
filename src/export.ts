@@ -1,10 +1,9 @@
 import { PDFDocument, rgb, degrees, BlendMode, type PDFPage, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { getStroke } from 'perfect-freehand';
 import type { NoteDocument, NotePage, Stroke } from './model';
 import { DARK_PAPER, LIGHT_PAPER, inkColor, isDark, themePdfCanvas } from './appearance';
 import { getAsset } from './storage';
-import { loadImage } from './engine/render';
+import { loadImage, strokeOutline } from './engine/render';
 import { renderPdfPage } from './pdf';
 
 export type ExportOptions = {theme:'dark'|'light'|'original'; pattern:boolean};
@@ -17,7 +16,7 @@ function drawPaperVector(out:PDFPage,page:NotePage,background:string,pattern:boo
  if(page.paper==='grid')for(let x=24;x<page.width;x+=step)out.drawLine({start:{x,y:0},end:{x,y:page.height},color:c,thickness:.65,opacity});
 }
 function strokeSvg(stroke:Stroke) {
- const points=getStroke(stroke.points.map(p=>[p.x,p.y,stroke.pressure===false?.5:p.p]),{size:stroke.width,thinning:stroke.highlighter||stroke.pen==='ballpoint'?0:stroke.pen==='fountain'?.7:.35,smoothing:.55,streamline:0,simulatePressure:false,last:true});
+ const points=strokeOutline(stroke);
  if(!points.length)return '';
  return `M ${points[0][0]} ${points[0][1]} `+points.slice(1).map((a,i)=>{const b=points[(i+2)%points.length];return `Q ${a[0]} ${a[1]} ${(a[0]+b[0])/2} ${(a[1]+b[1])/2}`;}).join(' ')+' Z';
 }

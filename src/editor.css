@@ -221,3 +221,40 @@
  .floating-toolbar.vertical .icon-button { height:34px; min-height:34px; }
  .floating-toolbar.vertical .palette-content { gap:2px; }
 }
+
+/* The app stays below iPad's status area, including older installed PWAs. */
+:root { --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px); --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px); }
+:root.ios-standalone { --safe-top:max(env(safe-area-inset-top,0px),24px); }
+#root { height:100dvh; box-sizing:border-box; padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); overflow:hidden; }
+.editor-shell { height:100%; }
+.library-shell,.settings-page { height:100%; min-height:0; overflow:auto; }
+.library-sidebar { top:var(--safe-top); bottom:var(--safe-bottom); left:var(--safe-left); }
+.sidebar-shade { top:var(--safe-top); bottom:var(--safe-bottom); }
+.brand-mark { width:40px; height:40px; }
+.brand-icon { display:block; flex-shrink:0; border-radius:23%; }
+.avatar { padding:0; background:none; border:0; }
+.about-symbol { background:none; width:auto; height:auto; border:0; }
+.page-extension { flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:9px; min-height:112px; width:min(430px,100%); padding:16px 16px 48px; color:var(--muted); font-size:12px; opacity:.65; touch-action:none; }
+.page-extension.ready { color:var(--cream); opacity:1; }
+.editor-shell .compact-page-status { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); width:auto; height:auto; min-height:0; padding:0; border:0; background:transparent; z-index:31; gap:0; }
+.writing-focus .compact-page-status { display:flex; }
+.page-counter { display:flex; align-items:center; justify-content:center; gap:8px; height:30px; min-width:62px; padding:0 13px; border:1px solid color-mix(in srgb,var(--line) 50%,transparent); border-radius:16px; color:var(--text); background:color-mix(in srgb,var(--panel) 60%,transparent); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font-size:11px; font-variant-numeric:tabular-nums; opacity:.7; }
+.page-counter:hover,.page-counter:focus-visible { opacity:1; }
+.page-counter>span { color:var(--muted); }
+.page-navigation-popover { position:absolute; bottom:40px; left:50%; transform:translateX(-50%); display:flex; gap:12px; padding:9px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:var(--shadow); color:var(--muted); }
+.page-navigation-popover .icon-button { min-width:32px; min-height:36px; width:32px; height:36px; }
+.page-navigation-popover input { min-height:32px; }
+.pen-popover { width:252px; max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - 76px); }
+.pen-popover>.pen-properties { gap:12px; padding:12px; border-radius:15px; }
+.pen-popover .properties-head { height:26px; }
+.pen-popover .properties-head .icon-button { width:30px; height:30px; min-width:30px; min-height:30px; }
+.tool-properties-symbol { color:var(--muted); padding:3px; display:flex; }
+.pen-popover .ink-swatches { gap:5px; }
+.pen-popover .ink-swatches button { width:26px; height:26px; }
+.pen-popover .custom-ink { min-height:28px; }
+.pen-popover .custom-ink input { height:28px; width:38px; }
+.pen-popover label { font-size:11px; gap:3px; }
+.pen-popover input[type=range] { height:24px; }
+.tool-type-picker { display:flex; justify-content:center; gap:8px; }
+.tool-type-picker button { display:grid; place-items:center; min-width:58px; min-height:48px; border:1px solid var(--line); border-radius:10px; color:var(--muted); }
+.tool-type-picker button[aria-pressed=true] { color:var(--cream); border-color:var(--accent); background:var(--soft); }

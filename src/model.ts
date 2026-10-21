@@ -13,9 +13,9 @@ export type Settings = {
   theme: 'dark' | 'light' | 'system'; accent: string; compact: boolean; penOnly: boolean; pressure: boolean;
   smoothing: number; circleLasso: boolean; scribbleErase: boolean; shapeHold: boolean; holdMs: number;
   twoFingerUndo: boolean; doubleTapZoom: boolean; toolbar: 'top' | 'bottom'; scroll: 'single' | 'continuous';
-  defaultTool: Tool; presets: PenPreset[];
+  defaultTool: Tool; presets: PenPreset[]; pageFlowVersion?: 1;
 };
-export const defaultSettings: Settings = { theme: 'dark', accent: '#d64c50', compact: false, penOnly: false, pressure: true, smoothing: 0.45, circleLasso: true, scribbleErase: true, shapeHold: true, holdMs: 650, twoFingerUndo: true, doubleTapZoom: true, toolbar: 'top', scroll: 'single', defaultTool: 'pen', presets: [{color:'#252b28',width:3,opacity:1,pen:'regular'},{color:'#aa514b',width:3,opacity:1,pen:'fountain'},{color:'#517b69',width:3,opacity:1,pen:'ballpoint'}] };
+export const defaultSettings: Settings = { theme: 'dark', accent: '#d64c50', compact: false, penOnly: true, pressure: true, smoothing: 0.45, circleLasso: true, scribbleErase: true, shapeHold: true, holdMs: 650, twoFingerUndo: true, doubleTapZoom: true, toolbar: 'top', scroll: 'continuous', pageFlowVersion: 1, defaultTool: 'pen', presets: [{color:'#252b28',width:3,opacity:1,pen:'regular'},{color:'#aa514b',width:3,opacity:1,pen:'fountain'},{color:'#517b69',width:3,opacity:1,pen:'ballpoint'}] };
 export const uid = () => crypto.randomUUID();
 export const covers = ['#b99b72', '#648577', '#7a849a', '#ad7771', '#8c7c97', '#a6a078', '#4e686d', '#70746b'];
 export function blankPage(options: Partial<NotePage> = {}): NotePage { return { id: uid(), width: 794, height: 1123, paper: 'grid', paperColor: '#0e151c', rotation: 0, objects: [], ...options }; }

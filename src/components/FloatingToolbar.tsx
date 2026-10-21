@@ -58,7 +58,7 @@ export function FloatingToolbar({ children, dock, topInset = 56, panel, onCollap
     {dragging && <div className={`palette-dock-indicator dock-${edge}`} style={{ '--dock-top': `${topInset}px` } as React.CSSProperties} aria-hidden/>}
     <div ref={ref} className={`editor-toolbar floating-toolbar ${vertical ? 'vertical' : 'horizontal'} ${collapsed ? 'collapsed' : ''} ${dragging ? 'dragging' : ''}`}
       role="toolbar" aria-label="Инструменты рисования" aria-orientation={vertical ? 'vertical' : 'horizontal'} data-edge={edge} data-collapsed={collapsed}
-      style={{ ...(position ? { left: position.x, top: position.y } : { visibility: 'hidden' }), '--palette-height': `calc(100dvh - ${topInset + 42}px)` } as React.CSSProperties & { '--palette-height': string }}>
+      style={{ ...(position ? { left: position.x, top: position.y } : { visibility: 'hidden' }), '--palette-height': `calc(100% - ${topInset + 42}px)` } as React.CSSProperties & { '--palette-height': string }}>
       <button className="palette-grip" aria-label="Переместить панель" title="Перетащите к краю · стрелки — перемещение · Alt + стрелка — край · Home — сброс"
         onPointerDown={event => {
           if (event.button !== 0) return; event.preventDefault(); onCollapse();

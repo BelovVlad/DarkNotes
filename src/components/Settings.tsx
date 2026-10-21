@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Database, Download, HardD
 import type { Folder, NoteDocument, Settings as SettingsType, Tool } from '../model';
 import { backup, download } from '../storage';
 import { IconButton } from './Editor';
+import { BrandMark } from './BrandMark';
 type Props={settings:SettingsType;onChange:(s:SettingsType)=>void;documents:NoteDocument[];folders:Folder[];onBack:()=>void;onImport:(files:FileList|null)=>void;notify:(s:string)=>void;onInstall:()=>void;};
 export function Settings({settings:s,onChange,documents,folders,onBack,onImport,notify,onInstall}:Props){const dark=useDarkTheme();const [tab,setTab]=useState('input'),[estimate,setEstimate]=useState<StorageEstimate|null>(null),[persistent,setPersistent]=useState(false),[busy,setBusy]=useState(false);const file=useRef<HTMLInputElement>(null);useEffect(()=>{void navigator.storage?.estimate().then(setEstimate);void navigator.storage?.persisted?.().then(setPersistent);},[]);const change=<K extends keyof SettingsType>(key:K,value:SettingsType[K])=>onChange({...s,[key]:value});const toggle=(key:'penOnly'|'pressure'|'circleLasso'|'scribbleErase'|'shapeHold'|'twoFingerUndo'|'doubleTapZoom'|'compact',title:string,description:string)=><SettingRow title={title} description={description}><button role="switch" aria-checked={s[key]} aria-label={title} className={`switch ${s[key]?'on':''}`} onClick={()=>change(key,!s[key])}><span/></button></SettingRow>;
 const exportAll=async()=>{setBusy(true);try{download(await backup(documents,folders,s),`DarkNotes-${new Date().toISOString().slice(0,10)}.darknotes`);notify('Резервная копия экспортирована');}catch(e){notify(String(e));}finally{setBusy(false);}};
@@ -16,5 +17,5 @@ return <div className="settings-page"><header className="settings-header"><IconB
 </main></div><input hidden type="file" ref={file} accept=".darknotes,.json" onChange={e=>{onImport(e.target.files);e.target.value='';}}/></div>;}
 function SettingRow({title,description,children}:{title:string;description?:string;children:ReactNode}){return <div className="setting-row"><div><strong>{title}</strong>{description&&<p>{description}</p>}</div><div className="setting-control">{children}</div></div>;}
 function SettingsHeading({title,subtitle}:{title:string;subtitle:string}){return <div className="settings-heading"><h2>{title}</h2><p>{subtitle}</p></div>;}
-function BookSymbol(){return <div className="about-symbol"><PenLine size={31}/></div>;}
+function BookSymbol(){return <div className="about-symbol"><BrandMark size={64}/></div>;}
 function formatBytes(n:number){return n>1024**3?`${(n/1024**3).toFixed(1)} ГБ`:n>1024**2?`${(n/1024**2).toFixed(1)} МБ`:`${Math.ceil(n/1024)} КБ`;}

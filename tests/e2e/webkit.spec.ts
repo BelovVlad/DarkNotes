@@ -29,9 +29,11 @@ test('WebKit tablet: ink, undo/redo, palette, rotation and offline persistence',
   await page.getByRole('button', { name: 'Свернуть панель инструментов', exact: true }).tap();
   await expect(page.getByRole('toolbar')).toHaveAttribute('data-collapsed', 'true');
   await page.getByRole('button', { name: 'Развернуть панель', exact: true }).tap();
+  await page.getByRole('button', { name: 'Переместить панель', exact: true }).hover();
   const handle = (await page.getByRole('button', { name: 'Переместить панель', exact: true }).boundingBox())!;
   await page.mouse.move(handle.x + 12, handle.y + 20); await page.mouse.down();
-  await page.mouse.move(handle.x + 12, handle.y + 240, { steps: 8 }); await page.mouse.up();
+  await page.mouse.move(12,400, { steps: 8 }); await page.mouse.up();
+  await expect(page.getByRole('toolbar')).toHaveAttribute('data-edge','left');
   await page.setViewportSize({ width: 1180, height: 820 });
   const bounds = (await page.getByRole('toolbar').boundingBox())!; expect(bounds.x).toBeGreaterThanOrEqual(8); expect(bounds.x + bounds.width).toBeLessThanOrEqual(1172);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; }); await page.reload();
@@ -63,4 +65,15 @@ test('WebKit tablet: PDF annotations, searchable export and editable project bac
   await page.locator('input[type=file]').setInputFiles({ name: 'export.pdf', mimeType: 'application/pdf', buffer: bytes });
   await expect(page.getByTestId('drawing-canvas')).toBeVisible(); await page.getByRole('button', { name: 'Показать страницы', exact: true }).click();
   await page.getByRole('textbox', { name: 'Поиск по тексту PDF' }).fill('physics'); await expect(page.getByRole('button', { name: /Стр. 1/ })).toBeVisible();
+});
+
+
+test('WebKit tablet: pull beyond the last page creates a blank continuation',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Новая тетрадь',exact:true}).last().click();
+ await page.getByPlaceholder('Например, квантовая механика').fill('Продолжение');await page.getByRole('dialog').getByRole('button',{name:'Создать тетрадь',exact:true}).click();
+ await expect(page.getByTestId('drawing-canvas')).toBeVisible();await page.getByRole('button',{name:'Перемещение (V)',exact:true}).click();
+ const drag=async()=>{const b=(await page.getByTestId('drawing-canvas').boundingBox())!;const y=Math.max(350,Math.min(700,b.y+400));await page.mouse.move(400,y);await page.mouse.down();await page.mouse.move(400,y-250,{steps:8});await page.mouse.up();};
+ await drag();await expect.poll(async()=>(await current(page)).pages.length).toBe(2);
+ await expect(page.getByRole('button',{name:'Страницы и масштаб',exact:true})).toHaveText('2/2');
+ expect((await current(page)).pages[1].objects).toEqual([]);await page.screenshot({path:'test-results/webkit-continuation.png'});
 });

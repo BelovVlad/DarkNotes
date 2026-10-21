@@ -39,10 +39,10 @@ test('white PDF export preserves source text, crop and intrinsic rotation',async
 
 test('ordinary eraser sweeps through a stroke, object eraser removes it, both undo',async({page})=>{
  await create(page);await draw(page);await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(1);
- await page.getByRole('button',{name:'Ластик (E)',exact:true}).click();await expect(page.getByRole('combobox',{name:'Режим ластика'})).toHaveValue('partial');
+ await page.getByRole('button',{name:'Ластик (E)',exact:true}).click();await expect(page.getByRole('button',{name:'Частичный ластик',exact:true})).toHaveAttribute('aria-pressed','true');
  const b=(await page.getByTestId('drawing-canvas').boundingBox())!;await page.mouse.move(b.x+200,b.y+100);await page.mouse.down();await page.mouse.move(b.x+200,b.y+260);await page.mouse.up();await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(2);
  await page.getByRole('button',{name:'Отменить (Ctrl+Z)',exact:true}).click();await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(1);
- await page.getByRole('button',{name:'Ластик (E)',exact:true}).click();await page.getByRole('combobox',{name:'Режим ластика'}).selectOption('stroke');await page.mouse.click(b.x+200,b.y+180);await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(0);
+ await page.getByRole('button',{name:'Ластик (E)',exact:true}).click();await page.getByRole('button',{name:'Объектный ластик',exact:true}).click();await page.mouse.click(b.x+200,b.y+180);await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(0);
  await page.getByRole('button',{name:'Отменить (Ctrl+Z)',exact:true}).click();await expect.poll(async()=>(await current(page)).pages[0].objects.length).toBe(1);
 });
 

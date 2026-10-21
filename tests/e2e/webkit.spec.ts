@@ -27,6 +27,11 @@ test('WebKit tablet: ink, undo/redo, palette, rotation and offline persistence',
   expect(await view.evaluate(el=>({top:el.scrollTop,width:el.querySelector('.page-frame')!.getBoundingClientRect().width}))).toEqual(before);
   expect(await page.evaluate(()=>(window as any).paperResizes)).toBe(0);await expect(page.locator('.save-indicator')).toHaveText('Автосохранение');
   const saved = (await current(page)).pages[0].objects;
+  const eraser=page.getByRole('button',{name:'Ластик (E)',exact:true}),properties=page.getByRole('region',{name:'Параметры инструмента',exact:true});
+  await eraser.tap();await expect(eraser).toHaveAttribute('aria-pressed','true');await expect(properties).toHaveCount(0);
+  await eraser.tap();await expect(page.getByRole('group',{name:'Режим ластика',exact:true})).toBeVisible();
+  await eraser.tap();await expect(properties).toHaveCount(0);
+  await page.getByRole('button',{name:'Ручка (P)',exact:true}).tap();await expect(properties).toHaveCount(0);
   await page.getByRole('button', { name: 'Отменить (Ctrl+Z)', exact: true }).click();
   await expect.poll(async () => (await current(page)).pages[0].objects.length).toBe(0);
   await page.getByRole('button', { name: 'Повторить (Ctrl+Shift+Z)', exact: true }).click();
